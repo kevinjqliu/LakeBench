@@ -12,7 +12,8 @@ class TPCHDataGenerator(TpcgenDataGenerator):
     target_folder_uri : str
         Local or mounted folder. Each table is written to its own subfolder.
     target_row_group_size_mb : int, default=128
-        Approximate uncompressed Parquet row-group size, passed to ``--row-group-bytes``.
+        Target on-disk Parquet row-group size in megabytes. Converted to tpcgen-cli's
+        uncompressed ``--row-group-bytes`` with per-table compression factors.
     compression : str, default="ZSTD(1)"
         Parquet compression codec, for example ``"SNAPPY"`` or ``"ZSTD(3)"``.
     table_list : list of str, optional
@@ -20,13 +21,19 @@ class TPCHDataGenerator(TpcgenDataGenerator):
     num_threads : int, optional
         Generator thread count. Defaults to all available CPU cores. Use a lower
         value such as 8 or 16 for large generations targeting mounted filesystems.
+    compression_factor : float, optional
+        Ratio of uncompressed to on-disk Parquet bytes, used to size row groups and
+        files. ``ZSTD(N)`` and ``SNAPPY`` use per-table measured factors; other
+        compressed codecs require an explicit value.
     output_format : {"parquet", "native"}, default="parquet"
         ``"native"`` writes the pipe-delimited ``.tbl`` format of ``dbgen``.
-        ``target_row_group_size_mb`` and ``compression`` apply only to Parquet.
+        ``target_row_group_size_mb``, ``compression``, and ``compression_factor``
+        apply only to Parquet.
     """
 
     BENCHMARK = "tpch"
     NATIVE_FORMAT = "tbl"
+    #: Measured from SF10 tpcgen-cli output with ZSTD(1), normalized linearly to SF1000.
     SF1000_SIZE_GB = {
         "customer": 7.755863,
         "lineitem": 145.739593,
@@ -36,4 +43,36 @@ class TPCHDataGenerator(TpcgenDataGenerator):
         "partsupp": 27.735921,
         "region": 0.000141,
         "supplier": 0.550992,
+    }
+    #: Ratio of uncompressed to ZSTD(1) / SNAPPY Parquet bytes, measured from SF10 output.
+    ZSTD1_COMPRESSION_FACTOR = {
+        "customer": 2.956,
+        "lineitem": 2.465,
+        "nation": 2.027,
+        "orders": 3.054,
+        "part": 2.947,
+        "partsupp": 3.800,
+        "region": 1.268,
+        "supplier": 2.702,
+    }
+    SNAPPY_COMPRESSION_FACTOR = {
+        "customer": 1.974,
+        "lineitem": 1.866,
+        "nation": 1.570,
+        "orders": 2.098,
+        "part": 2.154,
+        "partsupp": 2.789,
+        "region": 1.149,
+        "supplier": 1.858,
+    }
+    #: Ratio of native ``.tbl`` bytes to uncompressed Parquet bytes, measured at SF1.
+    NATIVE_SIZE_FACTOR = {
+        "customer": 0.961,
+        "lineitem": 2.031,
+        "nation": 0.549,
+        "orders": 1.529,
+        "part": 1.733,
+        "partsupp": 1.064,
+        "region": 0.239,
+        "supplier": 0.86,
     }

@@ -207,11 +207,14 @@ datagen.run()
 ```
 
 _Notes:_
-- Output is written by `tpcgen-cli` as `<root>/<table>/<table>.<part>.parquet`, for example `lineitem/lineitem.1.parquet`. Each table is split into roughly 256 MiB ZSTD(1) files based on its measured size; other codecs and the native format produce proportionally larger files. Small TPC-DS tables, and TPC-H `nation` and `region`, are always a single file.
-- `compression` (default `ZSTD(1)`) and `target_row_group_size_mb` (default 128, approximate uncompressed size) are passed to `tpcgen-cli` as `--compression` and `--row-group-bytes`.
+- Output is written by `tpcgen-cli` as `<root>/<table>/<table>.<part>.parquet`, for example `lineitem/lineitem.1.parquet`.
+- By default, each table is split automatically using its estimated total compressed size: 128 MiB files below 10 GiB, 256 MiB below 1 TiB, 512 MiB below 5 TiB, and 1 GiB for larger tables. Tables below 10 GiB are instead split into files of at least half a row group, so small tables are not fragmented. TPC-DS dimension sizes follow the TPC-DS row-count scaling model rather than scaling linearly.
+- `target_row_group_size_mb` (default 128) is an on-disk compressed-size target. LakeBench converts it to the uncompressed `--row-group-bytes` value expected by `tpcgen-cli` using benchmark- and table-specific ZSTD(1) or Snappy compression ratios measured from SF10 output, plus a 5% planning margin. All `ZSTD(N)` levels use the ZSTD(1) measurements for planning while the requested level is passed through unchanged. Other compressed codecs require an explicit `compression_factor`, which is used for both row groups and file estimates. TPC-DS generation uses the upstream C-reference compatibility mode.
+- `tpcgen-cli` does not split tables with fewer than 1M generator rows (small TPC-DS dimensions; TPC-DS sales and returns count orders, so for example `web_sales` below roughly SF17), so these can have fewer files than planned.
 - To use the legacy implementation, install `lakebench[tpcds_duckdb_datagen]` on Python 3.10+ and pass `backend="duckdb"`.
 - `output_format="native"` emits the TPC generators' pipe-delimited text instead of Parquet, matching what the official `dsdgen`/`dbgen` tools produce. TPC-DS native format support is currently in preview. See [Native TPC Generator Format](#native-tpc-generator-format-dat--tbl) below.
 - Large generations targeting mounted filesystems can set `num_threads=8` or `num_threads=16` to limit concurrent file creation and atomic renames. The default remains all available CPU cores.
+- Because row groups are sized on disk, each writer buffers up to `target_row_group_size_mb` × the table's compression ratio of uncompressed data (roughly 300–500 MiB at the 128 MiB default with ZSTD), so peak memory grows with `num_threads`. Lower `num_threads` or `target_row_group_size_mb` on memory-constrained machines.
 - The ClickBench dataset (only 1 size) should download with partitioned files in ~ 1 minute and ~ 6 minutes as a single file. 
 
 #### Native TPC Generator Format (`.dat` / `.tbl`)
@@ -243,7 +246,7 @@ _Notes:_
 - The format carries no header and no types, so LakeBench derives each reader's schema from the benchmark's resolved DDL. As a result, native loads are always typed exactly as the DDL declares. The generator's Parquet output does not always agree with the DDL on integer width (for example TPC-H `n_nationkey` is `int64` in Parquet but `integer` in the DDL), so on engines that do not pre-create tables the two formats can differ in integer width. Values are identical.
 - Every generated line ends with a trailing delimiter. LakeBench reads one extra trailing column and drops it, so no reader needs a lenient mode.
 - Empty fields are read as `NULL`, and quoting is disabled so `"` is treated as ordinary data.
-- Parquet-only options (`target_row_group_size_mb` and `compression`) are rejected with `output_format="native"`.
+- Parquet-only options (`target_row_group_size_mb`, `compression`, and `compression_factor`) are rejected with `output_format="native"`. Automatic part counts use per-table native-to-uncompressed-Parquet size ratios measured at SF1.
 - Native-input support varies by engine; see the selected [engine page](docs/engines/README.md).
 - `output_format="native"` requires `backend="rust"`. `num_threads` applies to native output exactly as it does to Parquet (defaulting to all available CPU cores).
 

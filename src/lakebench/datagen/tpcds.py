@@ -12,6 +12,11 @@ class _TPCDSDuckDBDataGenerator(_TPCDataGenerator):
 class _TPCDSTpcgenDataGenerator(TpcgenDataGenerator):
     BENCHMARK = "tpcds"
     NATIVE_FORMAT = "dat"
+    # The sizing measurements below are from C-reference-compatible output.
+    BENCHMARK_ARGUMENTS = ["--compat", "c"]
+    #: Measured from SF10 tpcgen-cli output with ZSTD(1), normalized linearly to SF1000.
+    #: Fixed-size and logarithmically scaled tables are rescaled by row count in
+    #: ``_zstd1_size_gib`` rather than linearly.
     SF1000_SIZE_GB = {
         "call_center": 0.001222,
         "catalog_page": 0.046315,
@@ -38,6 +43,155 @@ class _TPCDSTpcgenDataGenerator(TpcgenDataGenerator):
         "web_sales": 35.409775,
         "web_site": 0.001225,
     }
+    #: Ratio of uncompressed to ZSTD(1) / SNAPPY Parquet bytes, measured from SF10 output.
+    ZSTD1_COMPRESSION_FACTOR = {
+        "call_center": 1.166,
+        "catalog_page": 2.632,
+        "catalog_returns": 1.271,
+        "catalog_sales": 1.279,
+        "customer": 1.871,
+        "customer_address": 2.394,
+        "customer_demographics": 1.701,
+        "date_dim": 2.243,
+        "household_demographics": 1.629,
+        "income_band": 1.0,
+        "inventory": 1.026,
+        "item": 2.717,
+        "promotion": 2.144,
+        "reason": 3.299,
+        "ship_mode": 1.361,
+        "store": 1.562,
+        "store_returns": 1.267,
+        "store_sales": 1.344,
+        "time_dim": 3.194,
+        "warehouse": 1.017,
+        "web_page": 1.701,
+        "web_returns": 1.223,
+        "web_sales": 1.233,
+        "web_site": 1.374,
+    }
+    SNAPPY_COMPRESSION_FACTOR = {
+        "call_center": 1.073,
+        "catalog_page": 1.685,
+        "catalog_returns": 1.092,
+        "catalog_sales": 1.067,
+        "customer": 1.404,
+        "customer_address": 1.703,
+        "customer_demographics": 1.163,
+        "date_dim": 1.511,
+        "household_demographics": 1.122,
+        "income_band": 1.0,
+        "inventory": 1.007,
+        "item": 1.808,
+        "promotion": 1.470,
+        "reason": 1.930,
+        "ship_mode": 1.231,
+        "store": 1.262,
+        "store_returns": 1.109,
+        "store_sales": 1.120,
+        "time_dim": 1.863,
+        "warehouse": 1.107,
+        "web_page": 1.306,
+        "web_returns": 1.072,
+        "web_sales": 1.031,
+        "web_site": 1.152,
+    }
+    #: Ratio of native ``.dat`` bytes to uncompressed Parquet bytes, measured at SF1.
+    NATIVE_SIZE_FACTOR = {
+        "call_center": 0.177,
+        "catalog_page": 1.281,
+        "catalog_returns": 1.826,
+        "catalog_sales": 2.848,
+        "customer": 1.603,
+        "customer_address": 2.592,
+        "customer_demographics": 8.285,
+        "date_dim": 2.68,
+        "household_demographics": 3.165,
+        "income_band": 0.237,
+        "inventory": 6.492,
+        "item": 1.702,
+        "promotion": 1.159,
+        "reason": 0.586,
+        "ship_mode": 0.355,
+        "store": 0.299,
+        "store_returns": 1.986,
+        "store_sales": 2.859,
+        "time_dim": 1.735,
+        "warehouse": 0.123,
+        "web_page": 0.922,
+        "web_returns": 1.564,
+        "web_sales": 3.16,
+        "web_site": 0.676,
+    }
+    SIZE_REFERENCE_SCALE_FACTOR = 10
+    DEFINED_SCALE_FACTORS = (0, 1, 10, 100, 300, 1000, 3000, 10000, 30000, 100000)
+    # Final output row counts from the TPC-DS scaling model. Fact and return
+    # tables scale linearly and therefore do not need entries here.
+    ROW_COUNT_SCALING = {
+        "call_center": ("logarithmic", (0, 6, 24, 30, 36, 42, 48, 54, 60, 60)),
+        "catalog_page": ("static", (0, 11718, 12000, 20400, 26000, 30000, 36000, 40000, 46000, 50000)),
+        "customer": (
+            "logarithmic",
+            (0, 100000, 500000, 2000000, 5000000, 12000000, 30000000, 65000000, 80000000, 100000000),
+        ),
+        "customer_address": (
+            "logarithmic",
+            (0, 50000, 250000, 1000000, 2500000, 6000000, 15000000, 32500000, 40000000, 50000000),
+        ),
+        "customer_demographics": (
+            "static",
+            (0, 1920800, 1920800, 1920800, 1920800, 1920800, 1920800, 1920800, 1920800, 1920800),
+        ),
+        "date_dim": ("static", (0, 73049, 73049, 73049, 73049, 73049, 73049, 73049, 73049, 73049)),
+        "household_demographics": ("static", (0, 7200, 7200, 7200, 7200, 7200, 7200, 7200, 7200, 7200)),
+        "income_band": ("static", (0, 20, 20, 20, 20, 20, 20, 20, 20, 20)),
+        "item": (
+            "logarithmic",
+            (0, 18000, 102000, 204000, 264000, 300000, 360000, 402000, 462000, 502000),
+        ),
+        "promotion": ("logarithmic", (0, 300, 500, 1000, 1300, 1500, 1800, 2000, 2300, 2500)),
+        "reason": ("static", (0, 75, 75, 75, 75, 75, 75, 75, 75, 75)),
+        "ship_mode": ("static", (0, 20, 20, 20, 20, 20, 20, 20, 20, 20)),
+        "store": ("logarithmic", (0, 12, 102, 402, 804, 1002, 1350, 1500, 1704, 1902)),
+        "time_dim": ("static", (0, 86400, 86400, 86400, 86400, 86400, 86400, 86400, 86400, 86400)),
+        "warehouse": ("logarithmic", (0, 5, 10, 15, 17, 20, 22, 25, 27, 30)),
+        "web_page": ("logarithmic", (0, 60, 200, 2040, 2604, 3000, 3600, 4002, 4602, 5004)),
+        "web_site": ("logarithmic", (0, 30, 42, 24, 42, 54, 66, 78, 84, 96)),
+    }
+
+    def _zstd1_size_gib(self, table: str) -> float:
+        # Dimensions and inventory do not scale linearly; rescale the measured SF10 size by row count.
+        if table not in self.ROW_COUNT_SCALING and table != "inventory":
+            return super()._zstd1_size_gib(table)
+        reference_size_gib = self.SF1000_SIZE_GB[table] * self.SIZE_REFERENCE_SCALE_FACTOR / 1000
+        return reference_size_gib * (
+            self._expected_row_count(table, self.scale_factor)
+            / self._expected_row_count(table, self.SIZE_REFERENCE_SCALE_FACTOR)
+        )
+
+    @classmethod
+    def _expected_row_count(cls, table_name: str, scale_factor: float) -> int:
+        if table_name == "inventory":
+            item_rows = cls._expected_row_count("item", scale_factor)
+            item_ids = (item_rows // 6) * 3
+            item_ids += (0, 1, 2, 2, 3, 3)[item_rows % 6]
+            return item_ids * cls._expected_row_count("warehouse", scale_factor) * 261
+
+        model, row_counts = cls.ROW_COUNT_SCALING[table_name]
+        if scale_factor in cls.DEFINED_SCALE_FACTORS:
+            return row_counts[cls.DEFINED_SCALE_FACTORS.index(scale_factor)]
+        if model == "static":
+            return row_counts[1]
+
+        scale_slot = next(
+            index for index, defined_scale in enumerate(cls.DEFINED_SCALE_FACTORS) if scale_factor <= defined_scale
+        )
+        lower_scale = cls.DEFINED_SCALE_FACTORS[scale_slot - 1]
+        upper_scale = cls.DEFINED_SCALE_FACTORS[scale_slot]
+        fraction = (scale_factor - lower_scale) / (upper_scale - lower_scale)
+        base_row_count = row_counts[0] if scale_factor < 1 else row_counts[1]
+        count = int(fraction * (row_counts[scale_slot] - row_counts[scale_slot - 1])) + base_row_count
+        return count or 1
 
 
 class TPCDSDataGenerator:
@@ -52,7 +206,8 @@ class TPCDSDataGenerator:
     target_folder_uri : str
         Local or mounted folder. Each table is written to its own subfolder.
     target_row_group_size_mb : int, default=128
-        Approximate uncompressed Parquet row-group size, passed to ``--row-group-bytes``.
+        Target on-disk Parquet row-group size in megabytes. Converted to tpcgen-cli's
+        uncompressed ``--row-group-bytes`` with per-table compression factors.
     compression : str, default="ZSTD(1)"
         Parquet compression codec, for example ``"SNAPPY"`` or ``"ZSTD(3)"``.
     table_list : list of str, optional
@@ -62,10 +217,14 @@ class TPCDSDataGenerator:
         value such as 8 or 16 for large generations targeting mounted filesystems.
     backend : {"rust", "duckdb"}, default="rust"
         ``"rust"`` uses tpcgen-cli. ``"duckdb"`` is the legacy DuckDB generator.
+    compression_factor : float, optional
+        Ratio of uncompressed to on-disk Parquet bytes, used to size row groups and
+        files. ``ZSTD(N)`` and ``SNAPPY`` use per-table measured factors; other
+        compressed codecs require an explicit value.
     output_format : {"parquet", "native"}, default="parquet"
         ``"native"`` writes the pipe-delimited ``.dat`` format of ``dsdgen``
-        (preview). ``target_row_group_size_mb`` and ``compression`` apply only
-        to Parquet. Requires ``backend="rust"``.
+        (preview). ``target_row_group_size_mb``, ``compression``, and
+        ``compression_factor`` apply only to Parquet. Requires ``backend="rust"``.
     """
 
     def __init__(
@@ -77,6 +236,7 @@ class TPCDSDataGenerator:
         table_list: Optional[List[str]] = None,
         num_threads: Optional[int] = None,
         backend: str = "rust",
+        compression_factor: Optional[float] = None,
         output_format: str = "parquet",
     ) -> None:
         self.scale_factor = scale_factor
@@ -93,12 +253,18 @@ class TPCDSDataGenerator:
                 compression=compression,
                 table_list=table_list,
                 num_threads=num_threads,
+                compression_factor=compression_factor,
                 output_format=output_format,
             )
         elif backend == "duckdb":
             if output_format != "parquet":
                 raise ValueError("output_format='native' is supported only by backend='rust'.")
-            rust_options = {"compression": compression, "table_list": table_list, "num_threads": num_threads}
+            rust_options = {
+                "compression": compression,
+                "table_list": table_list,
+                "num_threads": num_threads,
+                "compression_factor": compression_factor,
+            }
             specified_options = [name for name, value in rust_options.items() if value is not None]
             if specified_options:
                 raise ValueError(

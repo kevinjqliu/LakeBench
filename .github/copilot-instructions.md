@@ -24,7 +24,7 @@ src/lakebench/
 │   └── clickbench/              # ClickBench: 43 queries on clickstream data
 │
 ├── datagen/
-│   ├── _tpcgen.py               # Thin tpcgen-cli wrapper: builds the command, picks part counts, runs it
+│   ├── _tpcgen.py               # tpcgen-cli wrapper: per-table file/row-group sizing, builds and runs commands
 │   ├── tpch.py                  # TPCHDataGenerator (tpcgen-cli)
 │   ├── tpcds.py                 # TPCDSDataGenerator (tpcgen-cli; DuckDB fallback)
 │   └── clickbench.py            # Downloads dataset from ClickHouse host
@@ -201,4 +201,4 @@ The format has no header and no types, so reader schemas come from the benchmark
 
 Every generated line ends with a trailing delimiter, so readers declare one extra trailing column (`TRAILING_DELIMITER_COLUMN`) and drop it; quoting must be disabled and empty fields must read as NULL. Engines implement `load_delimited_to_delta`; `Sail` subclasses `BaseEngine` rather than `Spark`, so it needs its own copy. Daft's CSV reader mislabels decimal precision, so decimals are read as text and cast.
 
-Generators pass options straight to tpcgen-cli. LakeBench only chooses `--parts` per table: ceil(`SF1000_SIZE_GB` × SF / 1000 ÷ 256 MiB). tpcgen-cli writes no file for empty parts (TPC-DS tables under 1M source rows, TPC-H nation/region), so a table may have fewer files than parts.
+LakeBench sizes files and row groups per table in `_tpcgen.py`: `--parts` comes from the estimated on-disk size (`SF1000_SIZE_GB` × measured compression factors, × `NATIVE_SIZE_FACTOR` for native) and `--row-group-bytes` converts the on-disk row-group target to uncompressed bytes. TPC-DS overrides `_zstd1_size_gib` because its dimensions do not scale linearly; do not derive native factors from `SF1000_SIZE_GB` at a different scale factor for the same reason. tpcgen-cli writes no file for empty parts (tables under 1M generator rows, TPC-H nation/region), so a table may have fewer files than parts.
