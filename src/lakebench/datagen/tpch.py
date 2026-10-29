@@ -27,13 +27,13 @@ class TPCHDataGenerator(TpcgenDataGenerator):
 
     BENCHMARK = "tpch"
     NATIVE_FORMAT = "tbl"
-    SF1000_SIZE_GB = {
-        "customer": 7.755863,
-        "lineitem": 145.739593,
-        "nation": 0.000250,
-        "orders": 36.859225,
-        "part": 4.295145,
-        "partsupp": 27.735921,
-        "region": 0.000141,
-        "supplier": 0.550992,
+    SF10_SIZE_MIB = {
+        "customer": 80.2,
+        "lineitem": 1528.0,
+        "nation": 0.0,
+        "orders": 383.1,
+        "part": 44.3,
+        "partsupp": 292.0,
+        "region": 0.0,
+        "supplier": 5.6,
     }

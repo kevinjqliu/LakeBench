@@ -5,7 +5,7 @@ import subprocess
 import sysconfig
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Sequence
 from urllib.parse import urlparse
 from urllib.request import url2pathname
 
@@ -23,10 +23,10 @@ class TpcgenDataGenerator:
     BENCHMARK = ""
     #: tpcgen-cli subcommand and file extension of the native pipe-delimited format.
     NATIVE_FORMAT = ""
-    #: Approximate ZSTD(1) Parquet size of each table at SF1000, in GB. Used only to
+    #: Measured ZSTD(1) Parquet size of each table at SF10, in MiB. Used only to
     #: choose how many parts (files) to split each table into.
-    SF1000_SIZE_GB: Dict[str, float] = {}
-    TARGET_FILE_SIZE_MB = 256
+    SF10_SIZE_MIB: Dict[str, float] = {}
+    TARGET_FILE_SIZE_MIB = 256
 
     def __init__(
         self,
@@ -42,10 +42,10 @@ class TpcgenDataGenerator:
             raise ValueError("output_format must be either 'parquet' or 'native'.")
         if output_format == "native" and (target_row_group_size_mb is not None or compression is not None):
             raise ValueError("target_row_group_size_mb and compression apply only to output_format='parquet'.")
-        table_list = list(self.SF1000_SIZE_GB if table_list is None else table_list)
+        table_list = list(self.SF10_SIZE_MIB if table_list is None else table_list)
         if not table_list:
             raise ValueError("table_list must contain at least one table.")
-        unknown_tables = sorted(set(table_list) - set(self.SF1000_SIZE_GB))
+        unknown_tables = sorted(set(table_list) - set(self.SF10_SIZE_MIB))
         if unknown_tables:
             raise ValueError(f"Unsupported {self.BENCHMARK} tables: {', '.join(unknown_tables)}")
 
@@ -58,9 +58,13 @@ class TpcgenDataGenerator:
         self.output_format = output_format
         self.executable = _find_executable()
         self.parts_by_table = {
-            table: max(1, math.ceil(self.SF1000_SIZE_GB[table] * scale_factor / 1000 * 1024 / self.TARGET_FILE_SIZE_MB))
+            table: max(1, math.ceil(self.SF10_SIZE_MIB[table] * self._growth(table) / self.TARGET_FILE_SIZE_MIB))
             for table in table_list
         }
+
+    def _growth(self, table: str) -> float:
+        """Return the table's row count at ``scale_factor`` relative to SF10."""
+        return self.scale_factor / 10
 
     def run(self) -> None:
         self.target_folder.mkdir(parents=True, exist_ok=True)
@@ -95,6 +99,16 @@ class TpcgenDataGenerator:
         if self.num_threads is not None:
             command += ["--num-threads", str(self.num_threads)]
         return command
+
+
+def _interpolate(x: float, xs: Sequence[float], ys: Sequence[float]) -> float:
+    """Piecewise-linear interpolation, clamped to the first and last points."""
+    if x <= xs[0]:
+        return ys[0]
+    for x0, x1, y0, y1 in zip(xs, xs[1:], ys, ys[1:]):
+        if x <= x1:
+            return y0 + (y1 - y0) * (x - x0) / (x1 - x0)
+    return ys[-1]
 
 
 def _local_path(uri: str) -> Path:

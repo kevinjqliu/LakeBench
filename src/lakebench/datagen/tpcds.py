@@ -1,7 +1,7 @@
 from typing import List, Optional
 
 from ._tpc import _TPCDataGenerator
-from ._tpcgen import TpcgenDataGenerator
+from ._tpcgen import TpcgenDataGenerator, _interpolate
 
 
 class _TPCDSDuckDBDataGenerator(_TPCDataGenerator):
@@ -12,32 +12,58 @@ class _TPCDSDuckDBDataGenerator(_TPCDataGenerator):
 class _TPCDSTpcgenDataGenerator(TpcgenDataGenerator):
     BENCHMARK = "tpcds"
     NATIVE_FORMAT = "dat"
-    SF1000_SIZE_GB = {
-        "call_center": 0.001222,
-        "catalog_page": 0.046315,
-        "catalog_returns": 7.501222,
-        "catalog_sales": 77.612198,
-        "customer": 1.954509,
-        "customer_address": 0.372212,
-        "customer_demographics": 0.533869,
-        "date_dim": 0.160342,
-        "household_demographics": 0.002795,
-        "income_band": 0.000129,
-        "inventory": 40.881562,
-        "item": 0.630520,
-        "promotion": 0.002376,
-        "reason": 0.000191,
-        "ship_mode": 0.000256,
-        "store": 0.001636,
-        "store_returns": 11.303521,
-        "store_sales": 94.989904,
-        "time_dim": 0.086069,
-        "warehouse": 0.000494,
-        "web_page": 0.000703,
-        "web_returns": 3.976669,
-        "web_sales": 35.409775,
-        "web_site": 0.001225,
+    SF10_SIZE_MIB = {
+        "call_center": 0.0,
+        "catalog_page": 0.5,
+        "catalog_returns": 76.8,
+        "catalog_sales": 794.7,
+        "customer": 20.0,
+        "customer_address": 3.8,
+        "customer_demographics": 5.5,
+        "date_dim": 1.6,
+        "household_demographics": 0.0,
+        "income_band": 0.0,
+        "inventory": 418.6,
+        "item": 6.5,
+        "promotion": 0.0,
+        "reason": 0.0,
+        "ship_mode": 0.0,
+        "store": 0.0,
+        "store_returns": 115.7,
+        "store_sales": 972.7,
+        "time_dim": 0.9,
+        "warehouse": 0.0,
+        "web_page": 0.0,
+        "web_returns": 40.7,
+        "web_sales": 362.5,
+        "web_site": 0.0,
     }
+    #: TPC-DS row counts at the spec's defined scale factors for the tables that do not
+    #: grow linearly and can exceed one million rows. Other tables grow linearly, or stay
+    #: under one million rows, which tpcgen-cli never splits.
+    DEFINED_SCALE_FACTORS = (1, 10, 100, 300, 1000, 3000, 10000, 30000, 100000)
+    NONLINEAR_ROW_COUNTS = {
+        "customer": (100000, 500000, 2000000, 5000000, 12000000, 30000000, 65000000, 80000000, 100000000),
+        "customer_address": (50000, 250000, 1000000, 2500000, 6000000, 15000000, 32500000, 40000000, 50000000),
+        "customer_demographics": (1920800,) * 9,
+        "inventory": (
+            11745000,
+            133110000,
+            399330000,
+            585684000,
+            783000000,
+            1033560000,
+            1311525000,
+            1627857000,
+            1965337830,
+        ),
+    }
+
+    def _growth(self, table: str) -> float:
+        rows = self.NONLINEAR_ROW_COUNTS.get(table)
+        if rows is None:
+            return super()._growth(table)
+        return _interpolate(self.scale_factor, self.DEFINED_SCALE_FACTORS, rows) / rows[1]
 
 
 class TPCDSDataGenerator:

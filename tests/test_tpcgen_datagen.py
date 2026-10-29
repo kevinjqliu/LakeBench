@@ -74,16 +74,35 @@ def test_parquet_options_are_passed_through(tmp_path, commands):
 def test_parts_scale_with_table_size(fake_executable, tmp_path):
     generator = TPCHDataGenerator(scale_factor=1000, target_folder_uri=str(tmp_path))
 
-    # 145.7 GB of lineitem at SF1000 in 256 MiB files.
-    assert generator.parts_by_table["lineitem"] == 583
+    # 1528 MiB of lineitem at SF10, grown 100x, in 256 MiB files.
+    assert generator.parts_by_table["lineitem"] == 597
     assert generator.parts_by_table["nation"] == 1
+
+
+@pytest.mark.parametrize(
+    ("scale_factor", "table", "expected_parts"),
+    [
+        (1000, "store_sales", 380),
+        # Grows with the TPC-DS row-count model, not linearly: 783M rows at SF1000 vs 133M at SF10.
+        (1000, "inventory", 10),
+        (1000, "customer", 2),
+        (10000, "customer", 11),
+        (100000, "customer_demographics", 1),
+        # Interpolated between the defined SF100 and SF300 row counts.
+        (200, "inventory", 7),
+    ],
+)
+def test_tpcds_parts_follow_spec_row_counts(fake_executable, tmp_path, scale_factor, table, expected_parts):
+    generator = TPCDSDataGenerator(scale_factor=scale_factor, target_folder_uri=str(tmp_path), table_list=[table])
+
+    assert generator._generator.parts_by_table[table] == expected_parts
 
 
 def test_tables_with_equal_part_counts_share_one_command(tmp_path, commands):
     TPCHDataGenerator(scale_factor=1, target_folder_uri=str(tmp_path)).run()
 
     tables = sorted(table for command in commands() for table in _arg(command, "--tables").split(","))
-    assert tables == sorted(TPCHDataGenerator.SF1000_SIZE_GB)
+    assert tables == sorted(TPCHDataGenerator.SF10_SIZE_MIB)
     assert len(commands()) == len(set(TPCHDataGenerator(1, str(tmp_path)).parts_by_table.values()))
 
 
