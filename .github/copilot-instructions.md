@@ -26,7 +26,7 @@ src/lakebench/
 ├── datagen/
 │   ├── _tpcgen.py               # Thin tpcgen-cli wrapper: builds the command, picks part counts, runs it
 │   ├── tpch.py                  # TPCHDataGenerator (tpcgen-cli)
-│   ├── tpcds.py                 # TPCDSDataGenerator (tpcgen-cli; DuckDB fallback)
+│   ├── tpcds.py                 # TPCDSDataGenerator (tpcgen-cli)
 │   └── clickbench.py            # Downloads dataset from ClickHouse host
 │
 ├── engines/
@@ -144,7 +144,6 @@ Install only what you need:
 | `fabric_data_warehouse` | `sqlalchemy`, `pyodbc`, `pandas`, `requests` (needs ODBC Driver 18 on the host) |
 | `daft` | `daft`, `deltalake`, `pyarrow` |
 | `tpcds_datagen` | `tpcgen-cli==4.0.0` |
-| `tpcds_duckdb_datagen` | Legacy DuckDB TPC-DS generator |
 | `tpch_datagen` | `tpcgen-cli==4.0.0` |
 | `sparkmeasure` | `sparkmeasure` |
 | `sail` | `pysail`, `pyspark[connect]`, `deltalake`, `pyarrow` |

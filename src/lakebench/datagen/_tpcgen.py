@@ -127,8 +127,7 @@ def _find_executable() -> str:
     if executable is None:
         raise ImportError(
             "tpcgen-cli is not installed. Install it with `pip install lakebench[tpch_datagen]` or "
-            "`pip install lakebench[tpcds_datagen]`. TPC-DS can alternatively use backend='duckdb' "
-            "with lakebench[tpcds_duckdb_datagen] on Python 3.10 or newer."
+            "`pip install lakebench[tpcds_datagen]`."
         )
     return executable
 

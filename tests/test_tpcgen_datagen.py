@@ -7,7 +7,6 @@ from unittest.mock import Mock
 import pytest
 
 from lakebench.datagen import TPCDSDataGenerator, TPCHDataGenerator, _tpcgen
-from lakebench.datagen.tpcds import _TPCDSTpcgenDataGenerator
 
 
 @pytest.fixture
@@ -95,7 +94,7 @@ def test_parts_scale_with_table_size(fake_executable, tmp_path):
 def test_tpcds_parts_follow_spec_row_counts(fake_executable, tmp_path, scale_factor, table, expected_parts):
     generator = TPCDSDataGenerator(scale_factor=scale_factor, target_folder_uri=str(tmp_path), table_list=[table])
 
-    assert generator._generator.parts_by_table[table] == expected_parts
+    assert generator.parts_by_table[table] == expected_parts
 
 
 def test_tables_with_equal_part_counts_share_one_command(tmp_path, commands):
@@ -179,41 +178,3 @@ def test_cli_rename_failure_suggests_fewer_threads(monkeypatch):
 
     with pytest.raises(RuntimeError, match="num_threads=8"):
         _tpcgen._run(["tpcgen-cli"])
-
-
-def test_public_generators_share_parameters():
-    tpcds_parameters = list(inspect.signature(TPCDSDataGenerator).parameters)
-    tpch_parameters = list(inspect.signature(TPCHDataGenerator).parameters)
-
-    assert tpcds_parameters[:6] == tpch_parameters[:6]
-    assert tpcds_parameters[-1] == tpch_parameters[-1] == "output_format"
-
-
-def test_tpcds_dispatches_to_tpcgen(tmp_path, fake_executable):
-    generator = TPCDSDataGenerator(1, str(tmp_path))
-
-    assert isinstance(generator._generator, _TPCDSTpcgenDataGenerator)
-
-
-def test_tpcds_dispatches_to_duckdb(monkeypatch, tmp_path):
-    duckdb_generator = Mock()
-    constructor = Mock(return_value=duckdb_generator)
-    monkeypatch.setattr("lakebench.datagen.tpcds._TPCDSDuckDBDataGenerator", constructor)
-
-    TPCDSDataGenerator(1, str(tmp_path), backend="duckdb").run()
-
-    constructor.assert_called_once_with(scale_factor=1, target_folder_uri=str(tmp_path), target_row_group_size_mb=128)
-    duckdb_generator.run.assert_called_once_with()
-
-
-@pytest.mark.parametrize(
-    ("kwargs", "message"),
-    [
-        ({"backend": "unknown"}, "backend"),
-        ({"backend": "duckdb", "compression": "SNAPPY", "num_threads": 1}, "compression, num_threads"),
-        ({"backend": "duckdb", "output_format": "native"}, "supported only by backend='rust'"),
-    ],
-)
-def test_tpcds_backend_options_are_validated(tmp_path, kwargs, message):
-    with pytest.raises(ValueError, match=message):
-        TPCDSDataGenerator(1, str(tmp_path), **kwargs)

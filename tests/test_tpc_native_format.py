@@ -6,7 +6,7 @@ import pytest
 
 from lakebench.benchmarks.tpcds import TPCDS
 from lakebench.benchmarks.tpch import TPCH
-from lakebench.datagen.tpcds import _TPCDSTpcgenDataGenerator
+from lakebench.datagen.tpcds import TPCDSDataGenerator
 from lakebench.datagen.tpch import TPCHDataGenerator
 from lakebench.engines.base import BaseEngine
 from lakebench.engines.duckdb import DuckDB
@@ -54,7 +54,7 @@ def test_every_canonical_ddl_variant_derives_a_usable_schema():
 
 
 def test_benchmarks_declare_native_extensions_matching_generators():
-    assert TPCDS.NATIVE_FILE_EXTENSION == _TPCDSTpcgenDataGenerator.NATIVE_FORMAT == "dat"
+    assert TPCDS.NATIVE_FILE_EXTENSION == TPCDSDataGenerator.NATIVE_FORMAT == "dat"
     assert TPCH.NATIVE_FILE_EXTENSION == TPCHDataGenerator.NATIVE_FORMAT == "tbl"
     assert TPCDS.NATIVE_FILE_GLOB == "*.dat"
     assert TPCH.NATIVE_FILE_GLOB == "*.tbl*"

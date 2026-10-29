@@ -47,8 +47,6 @@ daft = ["daft[deltalake]==0.7.21; python_version >= '3.10'", "deltalake>=1.5.0,<
 # because the part-count and row-group sizing tables are calibrated to its output.
 tpcds_datagen = ["tpcgen-cli==4.0.0"]
 tpch_datagen = ["tpcgen-cli==4.0.0"]
-# Legacy DuckDB TPC-DS generator, selected with backend="duckdb".
-tpcds_duckdb_datagen = ["duckdb==1.5.5; python_version >= '3.10'"]
 sparkmeasure = ["sparkmeasure==0.28.0; python_version >= '3.9'"]
 spark = ["pyspark>=3.5.0,<4.0.0; python_version >= '3.9'", "delta-spark>=3.2.0,<4.0.0; python_version >= '3.9'"]
 databricks_sql_warehouse = ["databricks-sql-connector>=3.0.0; python_version >= '3.9'", "pandas>=1.4.0; python_version >= '3.9'", "requests>=2.28.0; python_version >= '3.9'"]
