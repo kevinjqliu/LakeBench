@@ -5,7 +5,7 @@ import subprocess
 import sysconfig
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 from urllib.request import url2pathname
 
@@ -19,10 +19,15 @@ class TpcgenDataGenerator:
     BENCHMARK = ""
     #: tpcgen-cli subcommand and file extension of the native pipe-delimited format.
     NATIVE_FORMAT = ""
-    #: Measured ZSTD(1) Parquet size of each table at SF10, in MiB. Used only to
-    #: choose how many parts (files) to split each table into.
-    SF10_SIZE_MIB: Dict[str, float] = {}
-    TARGET_FILE_SIZE_MIB = 256
+    #: Measured size of each table at SF10, in MiB, as (ZSTD(1) Parquet, native).
+    #: Used only to choose how many files to split each table into.
+    SF10_SIZE_MIB: Dict[str, Tuple[float, float]] = {}
+    #: Default ``--row-group-bytes`` (uncompressed), giving the largest tables
+    #: ~128 MiB ZSTD(1) row groups on disk.
+    ROW_GROUP_MIB = 128
+    #: File size by estimated table size: 128 MiB below 10 GiB, 256 MiB below 1 TiB,
+    #: 512 MiB below 5 TiB, then 1 GiB.
+    FILE_SIZE_STEPS_MIB = ((10 * 1024, 128), (1024**2, 256), (5 * 1024**2, 512))
 
     def __init__(
         self,
@@ -41,8 +46,10 @@ class TpcgenDataGenerator:
             Scale factor that determines the generated dataset size.
         target_folder_uri : str
             Local or mounted folder. Each table is written to its own subfolder.
-        target_row_group_size_mb : int, default=128
-            Approximate uncompressed Parquet row-group size, passed to ``--row-group-bytes``.
+        target_row_group_size_mb : int, optional
+            Approximate uncompressed Parquet row-group size in MiB, passed to
+            ``--row-group-bytes``. Defaults to ``ROW_GROUP_MIB``, which gives the largest
+            tables ~128 MiB row groups on disk with ZSTD(1).
         compression : str, default="ZSTD(1)"
             Parquet compression codec, for example ``"SNAPPY"`` or ``"ZSTD(3)"``.
         table_list : list of str, optional
@@ -67,16 +74,18 @@ class TpcgenDataGenerator:
 
         self.scale_factor = scale_factor
         self.target_folder = _local_path(target_folder_uri)
-        self.target_row_group_size_mb = target_row_group_size_mb or 128
+        self.target_row_group_size_mb = target_row_group_size_mb or self.ROW_GROUP_MIB
         self.compression = compression or "ZSTD(1)"
         self.table_list = table_list
         self.num_threads = num_threads
         self.output_format = output_format
         self.executable = _find_executable()
-        self.parts_by_table = {
-            table: max(1, math.ceil(self.SF10_SIZE_MIB[table] * self._growth(table) / self.TARGET_FILE_SIZE_MIB))
-            for table in table_list
-        }
+        self.parts_by_table = {table: self._parts(table) for table in table_list}
+
+    def _parts(self, table: str) -> int:
+        size_mib = self.SF10_SIZE_MIB[table][self.output_format == "native"] * self._growth(table)
+        file_size_mib = next((mib for limit, mib in self.FILE_SIZE_STEPS_MIB if size_mib < limit), 1024)
+        return max(1, math.ceil(size_mib / file_size_mib))
 
     def _growth(self, table: str) -> float:
         """Return the table's row count at ``scale_factor`` relative to SF10."""

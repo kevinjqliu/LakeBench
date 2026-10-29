@@ -1,4 +1,4 @@
-import inspect
+import math
 import os
 import subprocess
 from pathlib import Path
@@ -34,9 +34,9 @@ def test_tpch_parquet_command(tmp_path, commands):
     assert _arg(command, "--scale-factor") == "10"
     assert _arg(command, "--output-dir") == str(tmp_path.resolve())
     assert _arg(command, "--tables") == "lineitem"
-    assert _arg(command, "--parts") == "6"
+    assert _arg(command, "--parts") == "12"
     assert _arg(command, "--compression") == "ZSTD(1)"
-    assert _arg(command, "--row-group-bytes") == "128MiB"
+    assert _arg(command, "--row-group-bytes") == "320MiB"
     assert "--num-threads" not in command
 
 
@@ -73,22 +73,48 @@ def test_parquet_options_are_passed_through(tmp_path, commands):
 def test_parts_scale_with_table_size(fake_executable, tmp_path):
     generator = TPCHDataGenerator(scale_factor=1000, target_folder_uri=str(tmp_path))
 
-    # 1528 MiB of lineitem at SF10, grown 100x, in 256 MiB files.
-    assert generator.parts_by_table["lineitem"] == 597
+    # 1501.7 MiB of lineitem at SF10, grown 100x (~147 GiB), in 256 MiB files.
+    assert generator.parts_by_table["lineitem"] == 587
     assert generator.parts_by_table["nation"] == 1
+
+
+@pytest.mark.parametrize(
+    ("scale_factor", "output_format", "file_size_mib"),
+    [(10, "parquet", 128), (1000, "parquet", 256), (100000, "parquet", 1024), (10, "native", 128)],
+)
+def test_file_size_steps_with_table_size(fake_executable, tmp_path, scale_factor, output_format, file_size_mib):
+    generator = TPCHDataGenerator(
+        scale_factor=scale_factor, target_folder_uri=str(tmp_path), table_list=["lineitem"], output_format=output_format
+    )
+    size_mib = generator.SF10_SIZE_MIB["lineitem"][output_format == "native"] * scale_factor / 10
+
+    assert generator.parts_by_table["lineitem"] == math.ceil(size_mib / file_size_mib)
+
+
+def test_native_parts_use_native_sizes(fake_executable, tmp_path):
+    kwargs = {"scale_factor": 1000, "target_folder_uri": str(tmp_path), "table_list": ["store_sales"]}
+
+    # Native text is ~4x the ZSTD(1) Parquet size, so it is split into ~4x the files.
+    assert TPCDSDataGenerator(**kwargs).parts_by_table["store_sales"] == 376
+    assert TPCDSDataGenerator(**kwargs, output_format="native").parts_by_table["store_sales"] == 1490
+
+
+def test_row_group_default_is_per_benchmark(fake_executable, tmp_path):
+    assert TPCHDataGenerator(1, str(tmp_path)).target_row_group_size_mb == 320
+    assert TPCDSDataGenerator(1, str(tmp_path)).target_row_group_size_mb == 176
 
 
 @pytest.mark.parametrize(
     ("scale_factor", "table", "expected_parts"),
     [
-        (1000, "store_sales", 380),
+        (1000, "store_sales", 376),
         # Grows with the TPC-DS row-count model, not linearly: 783M rows at SF1000 vs 133M at SF10.
-        (1000, "inventory", 10),
-        (1000, "customer", 2),
-        (10000, "customer", 11),
+        (1000, "inventory", 20),
+        (1000, "customer", 4),
+        (10000, "customer", 21),
         (100000, "customer_demographics", 1),
         # Uses the nearest defined scale factor at or below: SF100.
-        (200, "inventory", 5),
+        (200, "inventory", 10),
     ],
 )
 def test_tpcds_parts_follow_spec_row_counts(fake_executable, tmp_path, scale_factor, table, expected_parts):

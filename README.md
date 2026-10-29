@@ -207,8 +207,8 @@ datagen.run()
 ```
 
 _Notes:_
-- Output is written by `tpcgen-cli` as `<root>/<table>/<table>.<part>.parquet`, for example `lineitem/lineitem.1.parquet`. Each table is split into roughly 256 MiB ZSTD(1) files based on its measured size; other codecs and the native format produce proportionally larger files. Small TPC-DS tables, and TPC-H `nation` and `region`, are always a single file.
-- `compression` (default `ZSTD(1)`) and `target_row_group_size_mb` (default 128, approximate uncompressed size) are passed to `tpcgen-cli` as `--compression` and `--row-group-bytes`.
+- Output is written by `tpcgen-cli` as `<root>/<table>/<table>.<part>.parquet`, for example `lineitem/lineitem.1.parquet`. Each table is split by its estimated size into 128 MiB files below 10 GiB, 256 MiB below 1 TiB, 512 MiB below 5 TiB, and 1 GiB beyond; sizes are measured for ZSTD(1) and native output, so other codecs produce proportionally larger files. Small TPC-DS tables, and TPC-H `nation` and `region`, are always a single file.
+- `compression` (default `ZSTD(1)`) and `target_row_group_size_mb` are passed to `tpcgen-cli` as `--compression` and `--row-group-bytes`. `target_row_group_size_mb` is the approximate *uncompressed* row-group size; the defaults (320 for TPC-H, 176 for TPC-DS) give the largest tables ~128 MiB ZSTD(1) row groups on disk.
 - `output_format="native"` emits the TPC generators' pipe-delimited text instead of Parquet, matching what the official `dsdgen`/`dbgen` tools produce. TPC-DS native format support is currently in preview. See [Native TPC Generator Format](#native-tpc-generator-format-dat--tbl) below.
 - Large generations targeting mounted filesystems can set `num_threads=8` or `num_threads=16` to limit concurrent file creation and atomic renames. The default remains all available CPU cores.
 - The ClickBench dataset (only 1 size) should download with partitioned files in ~ 1 minute and ~ 6 minutes as a single file. 
