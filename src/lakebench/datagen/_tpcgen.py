@@ -42,7 +42,9 @@ class TpcgenDataGenerator:
             raise ValueError("output_format must be either 'parquet' or 'native'.")
         if output_format == "native" and (target_row_group_size_mb is not None or compression is not None):
             raise ValueError("target_row_group_size_mb and compression apply only to output_format='parquet'.")
-        table_list = list(table_list or self.SF1000_SIZE_GB)
+        table_list = list(self.SF1000_SIZE_GB if table_list is None else table_list)
+        if not table_list:
+            raise ValueError("table_list must contain at least one table.")
         unknown_tables = sorted(set(table_list) - set(self.SF1000_SIZE_GB))
         if unknown_tables:
             raise ValueError(f"Unsupported {self.BENCHMARK} tables: {', '.join(unknown_tables)}")
@@ -65,7 +67,9 @@ class TpcgenDataGenerator:
         tables_by_parts = defaultdict(list)
         for table in self.table_list:
             # tpcgen-cli skips files that already exist; clear any previous output.
-            shutil.rmtree(self.target_folder / table, ignore_errors=True)
+            table_folder = self.target_folder / table
+            if table_folder.exists():
+                shutil.rmtree(table_folder)
             tables_by_parts[self.parts_by_table[table]].append(table)
         for parts, tables in tables_by_parts.items():
             logger.info("Generating %s tables %s with %d part(s).", self.BENCHMARK, ", ".join(tables), parts)

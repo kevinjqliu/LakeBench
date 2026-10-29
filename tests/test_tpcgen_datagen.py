@@ -97,10 +97,20 @@ def test_run_clears_previous_table_output(tmp_path, commands):
     assert not stale.exists()
 
 
+def test_cleanup_failure_stops_generation(monkeypatch, tmp_path, commands):
+    (tmp_path / "region").mkdir()
+    monkeypatch.setattr(_tpcgen.shutil, "rmtree", Mock(side_effect=PermissionError("locked")))
+
+    with pytest.raises(PermissionError):
+        TPCHDataGenerator(scale_factor=1, target_folder_uri=str(tmp_path), table_list=["region"]).run()
+    assert commands() == []
+
+
 @pytest.mark.parametrize(
     ("kwargs", "message"),
     [
         ({"output_format": "csv"}, "output_format"),
+        ({"table_list": []}, "at least one table"),
         ({"output_format": "native", "compression": "SNAPPY"}, "apply only to output_format='parquet'"),
         ({"output_format": "native", "target_row_group_size_mb": 64}, "apply only to output_format='parquet'"),
         ({"table_list": ["unknown"]}, "Unsupported tpch tables: unknown"),
