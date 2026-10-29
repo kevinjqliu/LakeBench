@@ -87,8 +87,8 @@ def test_parts_scale_with_table_size(fake_executable, tmp_path):
         (1000, "customer", 2),
         (10000, "customer", 11),
         (100000, "customer_demographics", 1),
-        # Interpolated between the defined SF100 and SF300 row counts.
-        (200, "inventory", 7),
+        # Uses the nearest defined scale factor at or below: SF100.
+        (200, "inventory", 5),
     ],
 )
 def test_tpcds_parts_follow_spec_row_counts(fake_executable, tmp_path, scale_factor, table, expected_parts):
